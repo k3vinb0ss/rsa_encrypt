@@ -102,7 +102,7 @@ class RsaKeyHelper {
   ///
   /// Given a base64 encoded PEM [String] with correct headers and footers, return a
   /// [RSAPrivateKey]
-  RSAPrivateKey parsePrivateKeyFromPem(pemString) {
+  RSAPrivateKey parsePrivateKeyFromPem(String pemString) {
     List<int> privateKeyDER = decodePEM(pemString);
     var asn1Parser = new ASN1Parser(privateKeyDER as Uint8List);
     var topLevelSeq = asn1Parser.nextObject() as ASN1Sequence;
@@ -127,7 +127,7 @@ class RsaKeyHelper {
     }
 
     RSAPrivateKey rsaPrivateKey = RSAPrivateKey(
-        modulus.valueAsBigInteger,
+        modulus.valueAsBigInteger!,
         privateExponent.valueAsBigInteger,
         p.valueAsBigInteger,
         q.valueAsBigInteger);
@@ -230,6 +230,80 @@ class RsaKeyHelper {
     var dataBase64 = base64.encode(topLevel.encodedBytes);
     return """-----BEGIN RSA PUBLIC KEY-----\r\n$dataBase64\r\n-----END RSA PUBLIC KEY-----""";
   }
+
+  String encodePublicKeyToPemX509(RSAPublicKey publicKey) {
+    var algorithmSeq = new ASN1Sequence();
+    var algorithmAsn1Obj = new ASN1Object.fromBytes(Uint8List.fromList([0x6, 0x9, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0xd, 0x1, 0x1, 0x1]));
+    var paramsAsn1Obj = new ASN1Object.fromBytes(Uint8List.fromList([0x5, 0x0]));
+    algorithmSeq.add(algorithmAsn1Obj);
+    algorithmSeq.add(paramsAsn1Obj);
+
+    var publicKeySeq = new ASN1Sequence();
+    publicKeySeq.add(ASN1Integer(publicKey.modulus!));
+    publicKeySeq.add(ASN1Integer(publicKey.exponent!));
+    var publicKeySeqBitString = new ASN1BitString(Uint8List.fromList(publicKeySeq.encodedBytes));
+
+    var topLevelSeq = new ASN1Sequence();
+    topLevelSeq.add(algorithmSeq);
+    topLevelSeq.add(publicKeySeqBitString);
+    var dataBase64 = _castToPrintableEncodingPem(base64.encode(topLevelSeq.encodedBytes));
+
+    return """-----BEGIN PUBLIC KEY-----\n$dataBase64\n-----END PUBLIC KEY-----""";
+  }
+
+  String encodePrivateKeyToPemPSK8(RSAPrivateKey privateKey) {
+    var version = ASN1Integer(BigInt.from(0));
+
+    var algorithmSeq = new ASN1Sequence();
+    var algorithmAsn1Obj = new ASN1Object.fromBytes(Uint8List.fromList([0x6, 0x9, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0xd, 0x1, 0x1, 0x1]));
+    var paramsAsn1Obj = new ASN1Object.fromBytes(Uint8List.fromList([0x5, 0x0]));
+    algorithmSeq.add(algorithmAsn1Obj);
+    algorithmSeq.add(paramsAsn1Obj);
+
+    var privateKeySeq = new ASN1Sequence();
+    var modulus = ASN1Integer(privateKey.n!);
+    var publicExponent = ASN1Integer(BigInt.parse('65537'));
+    var privateExponent = ASN1Integer(privateKey.d!);
+    var p = ASN1Integer(privateKey.p!);
+    var q = ASN1Integer(privateKey.q!);
+    var dP = privateKey.d! % (privateKey.p! - BigInt.from(1));
+    var exp1 = ASN1Integer(dP);
+    var dQ = privateKey.d! % (privateKey.q! - BigInt.from(1));
+    var exp2 = ASN1Integer(dQ);
+    var iQ = privateKey.q!.modInverse(privateKey.p!);
+    var co = ASN1Integer(iQ);
+
+    privateKeySeq.add(version);
+    privateKeySeq.add(modulus);
+    privateKeySeq.add(publicExponent);
+    privateKeySeq.add(privateExponent);
+    privateKeySeq.add(p);
+    privateKeySeq.add(q);
+    privateKeySeq.add(exp1);
+    privateKeySeq.add(exp2);
+    privateKeySeq.add(co);
+    var publicKeySeqOctetString = new ASN1OctetString(Uint8List.fromList(privateKeySeq.encodedBytes));
+
+    var topLevelSeq = new ASN1Sequence();
+    topLevelSeq.add(version);
+    topLevelSeq.add(algorithmSeq);
+    topLevelSeq.add(publicKeySeqOctetString);
+    var dataBase64 = base64.encode(topLevelSeq.encodedBytes);
+
+    return """-----BEGIN PRIVATE KEY-----\r\n$dataBase64\r\n-----END PRIVATE KEY-----""";
+  }
+
+  String _castToPrintableEncodingPem(String key) {
+    var temp = '';
+    for (int i = 0; i < key.length; i++) {
+      if (i != 0 && i % 64 == 0) temp += '\n';
+      temp += key[i];
+    }
+    return temp;
+  }
+
+
+
 }
 
 /// Encrypting String
