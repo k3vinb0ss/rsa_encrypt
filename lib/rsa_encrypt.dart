@@ -248,7 +248,7 @@ class RsaKeyHelper {
     topLevelSeq.add(publicKeySeqBitString);
     var dataBase64 = _castToPrintableEncodingPem(base64.encode(topLevelSeq.encodedBytes));
 
-    return """-----BEGIN PUBLIC KEY-----\n$dataBase64\n-----END PUBLIC KEY-----""";
+    return """-----BEGIN PUBLIC KEY-----\n$dataBase64\n-----END PUBLIC KEY-----\n""";
   }
 
   String encodePrivateKeyToPemPSK8(RSAPrivateKey privateKey) {
